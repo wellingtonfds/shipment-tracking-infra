@@ -1,0 +1,4 @@
+aws_region         = "us-east-1"
+hosted_zone_name   = "example.com"
+application_domain = "api.example.com"
+allowed_api_cidrs  = ["0.0.0.0/0"]
