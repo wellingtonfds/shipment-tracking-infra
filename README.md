@@ -2,6 +2,22 @@
 
 Infraestrutura AWS de produção para o backend de rastreamento: EKS distribuído em duas zonas, ECR, RDS SQL Server Multi-AZ, Redis com failover Multi-AZ, ALB HTTPS, WAF, Route 53, KMS e Secrets Manager.
 
+## Organização
+
+Todos os arquivos `.tf` na raiz formam um único módulo Terraform e usam o mesmo estado. A divisão por arquivos melhora a navegação, mas não cria stacks independentes nem altera os endereços dos recursos.
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `provider.tf` | Provider AWS, tags padrão, zona Route 53 e zonas de disponibilidade |
+| `network.tf` | VPC, sub-redes públicas, privadas e de dados, NAT e tags do EKS |
+| `security.tf` | KMS e regras de rede entre borda, EKS, SQL Server e Redis |
+| `registry.tf` | ECR, scan e retenção de imagens |
+| `eks.tf` | IAM, cluster EKS e grupo de nós |
+| `data.tf` | RDS SQL Server Multi-AZ e ElastiCache Redis |
+| `edge.tf` | ACM, Route 53, ALB, target group, listener e WAF |
+
+O diretório `.terraform/modules/vpc` é um cache local baixado pelo `terraform init` para o módulo público `terraform-aws-modules/vpc/aws`. Seus exemplos, README e fontes não pertencem a este projeto, não são versionados e podem ser recriados pelo init.
+
 ## Escopo inicial
 
 O workflow somente valida e gera o plano Terraform. Ele não executa `apply`.
