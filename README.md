@@ -33,7 +33,7 @@ Crie GitHub Environments chamados `dev`, `hml` e `prod` e configure nestes ambie
 - `HOSTED_ZONE_NAME`
 - `ALLOWED_API_CIDRS`, como lista JSON dos CIDRs autorizados no listener publico da API e no endpoint publico do EKS, por exemplo `["198.51.100.0/24"]`.
 
-O workflow valida o código uma vez e executa `terraform plan` para os três ambientes. Ele não executa `apply`.
+O workflow valida o código uma vez e executa `terraform plan` para os três ambientes quando todas as variáveis estiverem configuradas. Sem as variáveis do papel OIDC ou do estado remoto, os planos são ignorados. O workflow nunca executa `apply`.
 
 ## Uso local
 

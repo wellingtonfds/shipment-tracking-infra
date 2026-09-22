@@ -45,6 +45,13 @@ jobs:
 
   plan:
     needs: validate
+    if: >-
+      vars.AWS_PLAN_ROLE_ARN != '' &&
+      vars.AWS_REGION != '' &&
+      vars.TF_STATE_BUCKET != '' &&
+      vars.TF_STATE_LOCK_TABLE != '' &&
+      vars.HOSTED_ZONE_NAME != '' &&
+      vars.ALLOWED_API_CIDRS != ''
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
