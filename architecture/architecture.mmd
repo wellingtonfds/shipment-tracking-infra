@@ -1,32 +1,16 @@
 flowchart TB
-  Internet --> DNS[Route 53]
-  DNS --> WAF[AWS WAF]
-  WAF --> ALB[ALB HTTPS]
-  ALB --> TG[Target group IP]
-  HPA[HPA: CPU média alvo 60%] --> PodA
-  HPA --> PodB
-  Scheduler[Scheduler: distribuição por zona] --> PodA
-  Scheduler --> PodB
+  Config[Perfil dev, hml ou prod] --> Root[Root Terraform compartilhado]
+  State[Estado S3 exclusivo] --> Root
+  Root --> Module[Módulo platform]
+  Module --> VPC
+  Module --> Edge[Route 53, ACM, WAF e ALB]
+  Module --> EKS
+  Module --> Data[RDS SQL Server e Redis]
+  Module --> ECR
 
-  subgraph VPC[VPC em duas zonas de disponibilidade]
-    subgraph A[Zona A]
-      PodA[Pod EKS]
-      RedisA[Redis primário]
-    end
-    subgraph B[Zona B]
-      PodB[Pod EKS]
-      RedisB[Redis réplica]
-    end
-    TG --> PodA
-    TG --> PodB
-    PodA --> DB[(RDS SQL Server Multi-AZ)]
-    PodB --> DB
-    PodA --> RedisA
-    PodB --> RedisB
+  subgraph VPC[VPC exclusiva em duas zonas]
+    EKS --> Data
   end
 
-  Pipeline[Pipeline do backend] --> ECR[ECR com scan]
-  ECR --> PodA
-  ECR --> PodB
-  Secrets[Secrets Manager e KMS] --> PodA
-  Secrets --> PodB
+  Edge --> EKS
+  ECR --> EKS

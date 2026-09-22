@@ -3,4 +3,5 @@
 *.tfstate.*
 *.tfvars
 !terraform.tfvars.example
+!environments/*.tfvars
 *.tfplan

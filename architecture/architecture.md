@@ -1,56 +1,40 @@
-# Arquitetura
+# Arquitetura multiambiente
 
 ```mermaid
 flowchart TB
-  Internet --> DNS[Route 53]
-  DNS --> WAF[AWS WAF]
-  WAF --> ALB[ALB HTTPS]
-  ALB --> TG[Target group IP]
-  HPA[HPA: CPU média alvo 60%] --> PodA
-  HPA --> PodB
-  Scheduler[Scheduler: distribuição por zona] --> PodA
-  Scheduler --> PodB
+  Config[Perfil dev, hml ou prod] --> Root[Root Terraform compartilhado]
+  State[Estado S3 exclusivo] --> Root
+  Root --> Module[Módulo platform]
+  Module --> VPC
+  Module --> Edge[Route 53, ACM, WAF e ALB]
+  Module --> EKS
+  Module --> Data[RDS SQL Server e Redis]
+  Module --> ECR
 
-  subgraph VPC[VPC em duas zonas de disponibilidade]
-    subgraph A[Zona A]
-      PodA[Pod EKS]
-      RedisA[Redis primário]
-    end
-    subgraph B[Zona B]
-      PodB[Pod EKS]
-      RedisB[Redis réplica]
-    end
-    TG --> PodA
-    TG --> PodB
-    PodA --> DB[(RDS SQL Server Multi-AZ)]
-    PodB --> DB
-    PodA --> RedisA
-    PodB --> RedisB
+  subgraph VPC[VPC exclusiva em duas zonas]
+    EKS --> Data
   end
 
-  Pipeline[Pipeline do backend] --> ECR[ECR com scan]
-  ECR --> PodA
-  ECR --> PodB
-  Secrets[Secrets Manager e KMS] --> PodA
-  Secrets --> PodB
+  Edge --> EKS
+  ECR --> EKS
 ```
 
-## Fronteiras e disponibilidade
+## Isolamento
 
-O banco e o cache permanecem em sub-redes isoladas, sem acesso público. O RDS usa failover Multi-AZ e senha mestre gerenciada pelo RDS; Redis é um cache com réplica e failover, não uma fonte de verdade. O ALB, EKS, NAT e Redis são distribuídos entre duas zonas.
+Cada ambiente possui recursos, nomes, DNS, CIDR e estado próprios. A separação de estado impede que um plano de dev altere recursos de hml ou prod. Os três ambientes ficam na mesma conta e região AWS, mas não compartilham VPC, banco, cache, cluster ou registry.
 
-O fluxo de entrega é: pipeline do backend publica uma imagem imutável no ECR; o deployment no EKS usa ao menos duas réplicas, HPA e `/health`; o `TargetGroupBinding` registra os pods saudáveis no target group do ALB.
+| Ambiente | CIDR | Estado | Endpoint |
+| --- | --- | --- | --- |
+| dev | `10.40.0.0/16` | `tracking/dev/terraform.tfstate` | `api-dev.<zona>` |
+| hml | `10.50.0.0/16` | `tracking/hml/terraform.tfstate` | `api-hml.<zona>` |
+| prod | `10.60.0.0/16` | `tracking/prod/terraform.tfstate` | `api.<zona>` |
 
-## Mapa da configuração Terraform
+## Disponibilidade e custo
 
-A configuração é um único módulo raiz, dividido por domínio. `provider.tf` fornece o contexto comum; `network.tf` fornece a VPC; `security.tf` define criptografia e conectividade; `registry.tf`, `eks.tf`, `data.tf` e `edge.tf` fornecem os serviços de imagem, computação, dados e borda.
+Todas as VPCs possuem sub-redes públicas, privadas e de dados em duas zonas. Dev e hml compartilham um NAT Gateway e executam banco e cache Single-AZ. Produção usa um NAT por zona, RDS Multi-AZ e Redis com réplica e failover.
 
-O bloco `module "vpc"` consome `terraform-aws-modules/vpc/aws`. O código baixado em `.terraform/modules/vpc` é somente cache de dependência local e não deve ser tratado como parte desta arquitetura nem enviado ao repositório.
+Dev usa um node group Spot diversificado. Homologação e produção usam On-Demand. Todos usam criptografia KMS, senha do RDS no Secrets Manager, tráfego TLS no Redis, ECR imutável com scan, ALB HTTPS e regras gerenciadas do WAF.
 
-Para visualizadores que recebem o conteúdo Mermaid diretamente, use [architecture.mmd](architecture.mmd). O arquivo não contém Markdown nem cercas de código.
-## Autoscaling de pods
+## Fluxo de entrega
 
-O HPA mantém de 2 a 6 pods do `tracking-api` no namespace `tracking`, buscando CPU média de 60%. A política permite crescimento de até dois pods por minuto e usa janela de estabilização de cinco minutos para redução.
-
-O patch de Deployment define `topologySpreadConstraints` por `topology.kubernetes.io/zone`, com `maxSkew: 1` e `DoNotSchedule`. Assim, com capacidade disponível, o scheduler mantém os pods equilibrados entre as duas zonas.
-
+O pipeline de infraestrutura gera planos independentes para dev, hml e prod. O pipeline da aplicação deve publicar no ECR e implantar no EKS do mesmo ambiente, usando os outputs daquele estado. A promoção esperada é dev → hml → prod.

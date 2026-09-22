@@ -47,7 +47,7 @@ resource "aws_iam_role_policy_attachment" "eks_ecr_read" {
 resource "aws_eks_cluster" "this" {
   name     = local.name
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.30"
+  version  = var.eks_version
 
   vpc_config {
     subnet_ids              = module.vpc.private_subnets
@@ -70,17 +70,28 @@ resource "aws_eks_node_group" "application" {
   node_group_name = "application"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = module.vpc.private_subnets
-  instance_types  = ["m6i.large"]
-  capacity_type   = "ON_DEMAND"
+  instance_types  = var.eks_instance_types
+  capacity_type   = var.eks_capacity_type
+  ami_type        = "AL2023_x86_64_STANDARD"
 
   scaling_config {
-    min_size     = 2
-    desired_size = 2
-    max_size     = 6
+    min_size     = var.eks_node_min_size
+    desired_size = var.eks_node_desired_size
+    max_size     = var.eks_node_max_size
   }
 
   update_config {
     max_unavailable = 1
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        var.eks_node_min_size <= var.eks_node_desired_size &&
+        var.eks_node_desired_size <= var.eks_node_max_size
+      )
+      error_message = "EKS node sizes must satisfy min_size <= desired_size <= max_size."
+    }
   }
 
   depends_on = [

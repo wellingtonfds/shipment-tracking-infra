@@ -18,13 +18,13 @@ resource "aws_db_instance" "sqlserver" {
   username                      = "dbadmin"
   manage_master_user_password   = true
   master_user_secret_kms_key_id = aws_kms_key.workload.arn
-  multi_az                      = true
+  multi_az                      = var.db_multi_az
   publicly_accessible           = false
-  deletion_protection           = true
-  backup_retention_period       = 35
+  deletion_protection           = var.db_deletion_protection
+  backup_retention_period       = var.db_backup_retention_period
   copy_tags_to_snapshot         = true
-  skip_final_snapshot           = false
-  final_snapshot_identifier     = format("%s-sqlserver-final", local.name)
+  skip_final_snapshot           = var.db_skip_final_snapshot
+  final_snapshot_identifier     = var.db_skip_final_snapshot ? null : format("%s-sqlserver-final", local.name)
 }
 
 resource "aws_elasticache_subnet_group" "redis" {
@@ -34,7 +34,7 @@ resource "aws_elasticache_subnet_group" "redis" {
 
 resource "aws_elasticache_replication_group" "redis" {
   replication_group_id       = format("%s-redis", local.name)
-  description                = "Highly available application cache"
+  description                = format("Application cache for %s", local.name)
   engine                     = "redis"
   node_type                  = var.redis_node_type
   port                       = 6379
@@ -42,11 +42,11 @@ resource "aws_elasticache_replication_group" "redis" {
   subnet_group_name          = aws_elasticache_subnet_group.redis.name
   security_group_ids         = [aws_security_group.redis.id]
   num_node_groups            = 1
-  replicas_per_node_group    = 1
-  automatic_failover_enabled = true
-  multi_az_enabled           = true
+  replicas_per_node_group    = var.redis_replicas_per_node_group
+  automatic_failover_enabled = var.redis_replicas_per_node_group > 0
+  multi_az_enabled           = var.redis_replicas_per_node_group > 0
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
   kms_key_id                 = aws_kms_key.workload.arn
-  snapshot_retention_limit   = 7
+  snapshot_retention_limit   = var.redis_snapshot_retention_limit
 }

@@ -18,11 +18,11 @@ resource "aws_ecr_lifecycle_policy" "application" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "Retain 30 images"
+      description  = format("Retain %d images", var.ecr_image_retention_count)
       selection = {
         tagStatus   = "any"
         countType   = "imageCountMoreThan"
-        countNumber = 30
+        countNumber = var.ecr_image_retention_count
       }
       action = { type = "expire" }
     }]

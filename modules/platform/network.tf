@@ -1,5 +1,3 @@
-# Network foundation. The downloaded VPC module remains a dependency cache in
-# .terraform/modules and is not repository source code.
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -13,7 +11,8 @@ module "vpc" {
   database_subnets = [for index, az in local.azs : cidrsubnet(var.vpc_cidr, 8, index + 20)]
 
   enable_nat_gateway           = true
-  one_nat_gateway_per_az       = true
+  single_nat_gateway           = var.single_nat_gateway
+  one_nat_gateway_per_az       = !var.single_nat_gateway
   enable_dns_hostnames         = true
   enable_dns_support           = true
   create_database_subnet_group = false

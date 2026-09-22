@@ -1,49 +1,85 @@
 # Tracking infrastructure
 
-Infraestrutura AWS de produção para o backend de rastreamento: EKS distribuído em duas zonas, ECR, RDS SQL Server Multi-AZ, Redis com failover Multi-AZ, ALB HTTPS, WAF, Route 53, KMS e Secrets Manager.
+Infraestrutura AWS do backend de rastreamento, gerenciada pelo mesmo código Terraform para os ambientes `dev`, `hml` e `prod`. Cada ambiente possui VPC, ECR, EKS, RDS SQL Server, Redis, ALB, WAF, certificado e DNS próprios, além de estado Terraform isolado.
 
 ## Organização
 
-Todos os arquivos `.tf` na raiz formam um único módulo Terraform e usam o mesmo estado. A divisão por arquivos melhora a navegação, mas não cria stacks independentes nem altera os endereços dos recursos.
+```text
+deployment/       root module executado pelo Terraform
+environments/     perfis de capacidade e chaves de estado por ambiente
+modules/platform/ implementação reutilizável da plataforma
+kubernetes/       manifesto complementar da aplicação
+architecture/     diagrama e decisões de arquitetura
+```
 
-| Arquivo | Responsabilidade |
-| --- | --- |
-| `provider.tf` | Provider AWS, tags padrão, zona Route 53 e zonas de disponibilidade |
-| `network.tf` | VPC, sub-redes públicas, privadas e de dados, NAT e tags do EKS |
-| `security.tf` | KMS e regras de rede entre borda, EKS, SQL Server e Redis |
-| `registry.tf` | ECR, scan e retenção de imagens |
-| `eks.tf` | IAM, cluster EKS e grupo de nós |
-| `data.tf` | RDS SQL Server Multi-AZ e ElastiCache Redis |
-| `edge.tf` | ACM, Route 53, ALB, target group, listener e WAF |
+Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram capacidade, disponibilidade, retenção e proteções sem copiar blocos de recursos.
 
-O diretório `.terraform/modules/vpc` é um cache local baixado pelo `terraform init` para o módulo público `terraform-aws-modules/vpc/aws`. Seus exemplos, README e fontes não pertencem a este projeto, não são versionados e podem ser recriados pelo init.
+| Ambiente | DNS | Perfil |
+| --- | --- | --- |
+| `dev` | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ |
+| `hml` | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
+| `prod` | `api.<zona>` | Dois nós, NAT por AZ, RDS e Redis Multi-AZ |
 
-## Escopo inicial
+## Pré-requisitos
 
-O workflow somente valida e gera o plano Terraform. Ele não executa `apply`.
+O bucket S3 do estado, a tabela DynamoDB de lock, a zona pública Route 53 e a role OIDC de planejamento são externos a esta configuração. O bucket deve ter versionamento habilitado.
 
-O bucket S3 do estado, a tabela DynamoDB de lock e a role OIDC de planejamento são pré-requisitos externos. Configure as variáveis do repositório: `AWS_REGION`, `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET`, `TF_STATE_KEY`, `TF_STATE_LOCK_TABLE`, `HOSTED_ZONE_NAME`, `APPLICATION_DOMAIN` e `ALLOWED_API_CIDRS`.
+Crie GitHub Environments chamados `dev`, `hml` e `prod` e configure nestes ambientes:
 
-Use uma role OIDC exclusiva, com permissão de leitura para o estado e recursos consultados pelo plano; ela não deve ter permissões de alteração.
+- `AWS_REGION`
+- `AWS_PLAN_ROLE_ARN`
+- `TF_STATE_BUCKET`
+- `TF_STATE_LOCK_TABLE`
+- `HOSTED_ZONE_NAME`
+- `ALLOWED_API_CIDRS`, como lista JSON: `["0.0.0.0/0"]`
 
-## Validação local
+O workflow valida o código uma vez e executa `terraform plan` para os três ambientes. Ele não executa `apply`.
+
+## Uso local
+
+Defina as variáveis comuns:
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars
-terraform init -backend=false
-terraform fmt -check -recursive
-terraform validate
+export TF_VAR_aws_region="us-east-1"
+export TF_VAR_hosted_zone_name="example.com"
+export TF_VAR_allowed_api_cidrs='["0.0.0.0/0"]'
 ```
+
+Valide sem acessar o estado remoto:
+
+```bash
+terraform -chdir=deployment init -backend=false
+terraform fmt -check -recursive
+terraform -chdir=deployment validate
+```
+
+Inicialize e gere o plano de um ambiente:
+
+```bash
+terraform -chdir=deployment init -reconfigure \
+  -backend-config=../environments/dev.backend.hcl \
+  -backend-config="bucket=SEU_BUCKET" \
+  -backend-config="region=$TF_VAR_aws_region" \
+  -backend-config="dynamodb_table=SUA_TABELA_DE_LOCK" \
+  -backend-config="encrypt=true"
+
+terraform -chdir=deployment plan -var-file=../environments/dev.tfvars
+```
+
+Troque `dev` por `hml` ou `prod` para operar outro ambiente. Sempre reinicialize com o backend correspondente antes de planejar ou aplicar.
+
+## Custos e disponibilidade
+
+Dev mantém os mesmos serviços de produção para reduzir diferenças funcionais, mas usa um NAT Gateway, nós Spot, SQL Server e Redis mínimos, armazenamento reduzido e recursos Single-AZ. O control plane do EKS, o SQL Server Standard, o NAT Gateway, o ALB e o WAF continuam gerando custos fixos enquanto o ambiente existir.
+
+Homologação usa nós On-Demand, mas permanece Single-AZ e com somente um NAT. Produção mantém redundância entre duas zonas, backups longos e proteção contra exclusão.
 
 ## Contrato com o backend
 
-O pipeline da aplicação publica imagens imutáveis no ECR e faz o deploy no EKS. O deployment deve usar no mínimo duas réplicas, `topologySpreadConstraints`, HPA e o endpoint `/health`. Um `TargetGroupBinding` do AWS Load Balancer Controller deve consumir o ARN exportado pelo Terraform. Somente a identidade IAM do workload deve ler o segredo gerenciado pelo RDS.
+Cada ambiente publica imagens no seu próprio ECR e implanta no EKS correspondente. O Deployment deve definir requests e limits de CPU, usar o endpoint `/health` e consumir o target group exportado pelo Terraform por meio de um `TargetGroupBinding`.
 
-RDS e Redis não têm IP público. A aplicação mantém o isolamento lógico dos clientes e o particionamento da tabela de eventos; a infraestrutura reforça o isolamento com rede, IAM, criptografia e segredos.
+O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) mantém de duas a seis réplicas e tenta distribuí-las entre zonas. Em dev e hml, o único nó inicial pode concentrar as réplicas até que o node group aumente.
+
+RDS e Redis não têm endereço público. Somente a identidade IAM do workload deve receber acesso ao segredo mestre gerenciado pelo RDS.
 
 Veja a arquitetura em [architecture/architecture.md](architecture/architecture.md).
-## Autoscaling de pods
-
-O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) define o HPA do Deployment `tracking-api` no namespace `tracking`: mínimo de 2, máximo de 6 e CPU média alvo de 60%. O scale-up permite até dois pods por minuto; o scale-down aguarda cinco minutos para evitar oscilações.
-
-O Deployment deve definir `resources.requests.cpu` e `resources.limits.cpu`. A métrica percentual do HPA é calculada contra o request de CPU. O patch também exige distribuição por zona com `maxSkew: 1`; se faltar capacidade em uma zona, o pod permanece pendente, pois esta etapa não cria nós EC2 adicionais.

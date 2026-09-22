@@ -10,15 +10,53 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
 jobs:
-  validate-and-plan:
+  validate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deployment
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Check formatting
+        run: terraform fmt -check -recursive ..
+      - name: Initialize without backend
+        run: terraform init -backend=false
+      - name: Validate configuration
+        run: terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+      - name: Run TFLint
+        run: tflint --init && tflint --recursive
+        working-directory: .
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+
+  plan:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, hml, prod]
+    environment: ${{ matrix.environment }}
+    defaults:
+      run:
+        working-directory: deployment
     env:
-      TF_IN_AUTOMATION: "true"
-      TF_INPUT: "false"
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
       TF_VAR_hosted_zone_name: ${{ vars.HOSTED_ZONE_NAME }}
-      TF_VAR_application_domain: ${{ vars.APPLICATION_DOMAIN }}
       TF_VAR_allowed_api_cidrs: ${{ vars.ALLOWED_API_CIDRS }}
 
     steps:
@@ -26,33 +64,30 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
-      - run: terraform fmt -check -recursive
-      - run: terraform init -backend=false
-      - run: terraform validate
-      - uses: terraform-linters/setup-tflint@v4
-      - run: tflint --init && tflint --recursive
-      - uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: config
-          scan-ref: .
-          exit-code: "1"
-          severity: HIGH,CRITICAL
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-      - run: >-
+      - name: Initialize ${{ matrix.environment }} backend
+        run: >-
           terraform init -reconfigure
+          -backend-config="../environments/${{ matrix.environment }}.backend.hcl"
           -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
-          -backend-config="key=${{ vars.TF_STATE_KEY }}"
           -backend-config="region=${{ vars.AWS_REGION }}"
           -backend-config="dynamodb_table=${{ vars.TF_STATE_LOCK_TABLE }}"
           -backend-config="encrypt=true"
-      - run: terraform plan -no-color -out=tfplan
-      - run: terraform show -no-color tfplan > plan.txt
+      - name: Plan ${{ matrix.environment }}
+        run: >-
+          terraform plan -no-color
+          -var-file="../environments/${{ matrix.environment }}.tfvars"
+          -out="${{ matrix.environment }}.tfplan"
+      - name: Render plan
+        run: >-
+          terraform show -no-color
+          "${{ matrix.environment }}.tfplan"
+          > "${{ matrix.environment }}-plan.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: terraform-plan-${{ github.sha }}
-          path: plan.txt
+          name: terraform-plan-${{ matrix.environment }}-${{ github.sha }}
+          path: deployment/${{ matrix.environment }}-plan.txt
           retention-days: 7
-
