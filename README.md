@@ -42,3 +42,8 @@ O pipeline da aplicação publica imagens imutáveis no ECR e faz o deploy no EK
 RDS e Redis não têm IP público. A aplicação mantém o isolamento lógico dos clientes e o particionamento da tabela de eventos; a infraestrutura reforça o isolamento com rede, IAM, criptografia e segredos.
 
 Veja a arquitetura em [architecture/architecture.md](architecture/architecture.md).
+## Autoscaling de pods
+
+O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) define o HPA do Deployment `tracking-api` no namespace `tracking`: mínimo de 2, máximo de 6 e CPU média alvo de 60%. O scale-up permite até dois pods por minuto; o scale-down aguarda cinco minutos para evitar oscilações.
+
+O Deployment deve definir `resources.requests.cpu` e `resources.limits.cpu`. A métrica percentual do HPA é calculada contra o request de CPU. O patch também exige distribuição por zona com `maxSkew: 1`; se faltar capacidade em uma zona, o pod permanece pendente, pois esta etapa não cria nós EC2 adicionais.

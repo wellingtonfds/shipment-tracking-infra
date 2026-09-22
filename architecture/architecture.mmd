@@ -3,6 +3,10 @@ flowchart TB
   DNS --> WAF[AWS WAF]
   WAF --> ALB[ALB HTTPS]
   ALB --> TG[Target group IP]
+  HPA[HPA: CPU média alvo 60%] --> PodA
+  HPA --> PodB
+  Scheduler[Scheduler: distribuição por zona] --> PodA
+  Scheduler --> PodB
 
   subgraph VPC[VPC em duas zonas de disponibilidade]
     subgraph A[Zona A]
