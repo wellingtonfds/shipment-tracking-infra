@@ -1,0 +1,4 @@
+# Endpoint publico do EKS necessario ao pipeline de deploy; CIDRs restritos por allowed_api_cidrs.
+AWS-0040
+# ALB da API e intencionalmente publico e filtrado por allowed_api_cidrs e AWS WAF.
+AWS-0053

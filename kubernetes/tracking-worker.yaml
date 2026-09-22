@@ -14,11 +14,22 @@ spec:
         app.kubernetes.io/name: tracking-worker
     spec:
       terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: tracking-worker
           image: tracking-api:latest
           imagePullPolicy: IfNotPresent
           command: ["node", "dist/worker.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           envFrom:
             - configMapRef:
                 name: tracking-runtime-config
@@ -42,6 +53,9 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           startupProbe:
             exec:
               command:
@@ -68,6 +82,9 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

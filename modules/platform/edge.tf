@@ -31,6 +31,7 @@ resource "aws_lb" "application" {
   security_groups            = [aws_security_group.alb.id]
   subnets                    = module.vpc.public_subnets
   enable_deletion_protection = var.alb_deletion_protection
+  drop_invalid_header_fields = true
 }
 
 resource "aws_lb_target_group" "application" {

@@ -14,11 +14,11 @@ architecture/     diagrama e decisões de arquitetura
 
 Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram capacidade, disponibilidade, retenção e proteções sem copiar blocos de recursos.
 
-| Ambiente | DNS | Perfil |
-| --- | --- | --- |
-| `dev` | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ |
-| `hml` | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
-| `prod` | `api.<zona>` | Dois nós, NAT por AZ, RDS e Redis Multi-AZ |
+| Ambiente | DNS              | Perfil                                            |
+| -------- | ---------------- | ------------------------------------------------- |
+| `dev`    | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ      |
+| `hml`    | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
+| `prod`   | `api.<zona>`     | Dois nós, NAT por AZ, RDS e Redis Multi-AZ        |
 
 ## Pré-requisitos
 
@@ -31,7 +31,7 @@ Crie GitHub Environments chamados `dev`, `hml` e `prod` e configure nestes ambie
 - `TF_STATE_BUCKET`
 - `TF_STATE_LOCK_TABLE`
 - `HOSTED_ZONE_NAME`
-- `ALLOWED_API_CIDRS`, como lista JSON: `["0.0.0.0/0"]`
+- `ALLOWED_API_CIDRS`, como lista JSON dos CIDRs autorizados no listener publico da API e no endpoint publico do EKS, por exemplo `["198.51.100.0/24"]`.
 
 O workflow valida o código uma vez e executa `terraform plan` para os três ambientes. Ele não executa `apply`.
 
@@ -42,7 +42,7 @@ Defina as variáveis comuns:
 ```bash
 export TF_VAR_aws_region="us-east-1"
 export TF_VAR_hosted_zone_name="example.com"
-export TF_VAR_allowed_api_cidrs='["0.0.0.0/0"]'
+export TF_VAR_allowed_api_cidrs='["198.51.100.0/24"]'
 ```
 
 Valide sem acessar o estado remoto:

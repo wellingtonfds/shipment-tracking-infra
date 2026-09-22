@@ -53,6 +53,7 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = module.vpc.private_subnets
     endpoint_private_access = true
     endpoint_public_access  = true
+    public_access_cidrs     = var.allowed_api_cidrs
   }
 
   encryption_config {
