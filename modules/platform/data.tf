@@ -47,6 +47,24 @@ resource "aws_elasticache_replication_group" "redis" {
   multi_az_enabled           = var.redis_replicas_per_node_group > 0
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth.result
   kms_key_id                 = aws_kms_key.workload.arn
   snapshot_retention_limit   = var.redis_snapshot_retention_limit
+}
+
+resource "random_password" "redis_auth" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "redis_auth" {
+  name                    = format("%s/redis/auth-token", local.name)
+  description             = format("Token de autenticação TLS do Redis para %s", local.name)
+  kms_key_id              = aws_kms_key.workload.arn
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "redis_auth" {
+  secret_id     = aws_secretsmanager_secret.redis_auth.id
+  secret_string = random_password.redis_auth.result
 }

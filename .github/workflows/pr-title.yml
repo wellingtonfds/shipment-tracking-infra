@@ -1,0 +1,38 @@
+name: Validar título do PR
+
+on:
+  pull_request_target:
+    branches:
+      - master
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validar formato Conventional Commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar título
+        uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            build
+            chore
+            ci
+            docs
+            feat
+            fix
+            perf
+            refactor
+            revert
+            style
+            test
