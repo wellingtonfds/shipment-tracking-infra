@@ -1,6 +1,6 @@
 # Tracking infrastructure
 
-Infraestrutura AWS do backend de rastreamento, gerenciada pelo mesmo código Terraform para os ambientes `dev`, `hml` e `prod`. Cada ambiente possui VPC, ECR, EKS, RDS SQL Server, Redis, ALB, WAF, certificado e DNS próprios, além de estado Terraform isolado.
+Infraestrutura AWS do backend de rastreamento, gerenciada pelo mesmo código Terraform para os ambientes `dev`, `hml` e `prod`. O staging (`hml`) pode ser planejado sem criar estado remoto, domínio, Route 53, WAF ou certificado.
 
 ## Organização
 
@@ -17,23 +17,18 @@ Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram
 | Ambiente | DNS              | Perfil                                            |
 | -------- | ---------------- | ------------------------------------------------- |
 | `dev`    | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ      |
-| `hml`    | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
+| `hml`    | DNS do ALB HTTP  | On-Demand, um nó inicial, um NAT, dados Single-AZ |
 | `prod`   | `api.<zona>`     | Dois nós, NAT por AZ, RDS e Redis Multi-AZ        |
 
 ## Pré-requisitos
 
-O bucket S3 do estado, a tabela DynamoDB de lock, a zona pública Route 53 e a role OIDC de planejamento são externos a esta configuração. O bucket deve ter versionamento habilitado.
+O bucket S3 do estado, a tabela DynamoDB de lock e a zona pública Route 53 continuam externos a esta configuração para os ambientes que usam a borda pública. O plano automatizado de `hml` não usa backend remoto.
 
-Crie GitHub Environments chamados `dev`, `hml` e `prod` e configure nestes ambientes:
+Para executar o plano de `hml` por GitHub Actions, configure a variável de repositório:
 
-- `AWS_REGION`
 - `AWS_PLAN_ROLE_ARN`
-- `TF_STATE_BUCKET`
-- `TF_STATE_LOCK_TABLE`
-- `HOSTED_ZONE_NAME`
-- `ALLOWED_API_CIDRS`, como lista JSON dos CIDRs autorizados no listener publico da API e no endpoint publico do EKS, por exemplo `["198.51.100.0/24"]`.
 
-O workflow valida o código uma vez e executa `terraform plan` para os três ambientes quando todas as variáveis estiverem configuradas. Sem as variáveis do papel OIDC ou do estado remoto, os planos são ignorados. O workflow nunca executa `apply`.
+Comente exatamente `terraform-plan-hml` em um PR interno como `OWNER`, `MEMBER` ou `COLLABORATOR`. O workflow busca o head do PR, inicializa uma cópia temporária sem backend S3, valida e gera apenas o `terraform plan` de `hml`. O artifact do plano permanece disponível por sete dias; o workflow nunca executa `apply`.
 
 ## Uso local
 

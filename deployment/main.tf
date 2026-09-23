@@ -1,5 +1,7 @@
 locals {
-  application_domain = var.environment == "prod" ? format("api.%s", var.hosted_zone_name) : format("api-%s.%s", var.environment, var.hosted_zone_name)
+  application_domain = var.enable_public_edge ? (
+    var.environment == "prod" ? format("api.%s", var.hosted_zone_name) : format("api-%s.%s", var.environment, var.hosted_zone_name)
+  ) : null
 }
 
 module "platform" {
@@ -11,6 +13,7 @@ module "platform" {
   single_nat_gateway = var.environment_config.single_nat_gateway
   hosted_zone_name   = var.hosted_zone_name
   application_domain = local.application_domain
+  enable_public_edge = var.enable_public_edge
   allowed_api_cidrs  = var.allowed_api_cidrs
 
   eks_version           = var.environment_config.eks.version

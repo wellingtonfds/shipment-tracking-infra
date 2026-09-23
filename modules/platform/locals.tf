@@ -3,6 +3,8 @@ data "aws_availability_zones" "available" {
 }
 
 data "aws_route53_zone" "public" {
+  count = var.enable_public_edge ? 1 : 0
+
   name         = format("%s.", var.hosted_zone_name)
   private_zone = false
 }

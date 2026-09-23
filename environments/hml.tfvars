@@ -1,4 +1,5 @@
-environment = "hml"
+environment        = "hml"
+enable_public_edge = false
 
 environment_config = {
   vpc_cidr           = "10.50.0.0/16"

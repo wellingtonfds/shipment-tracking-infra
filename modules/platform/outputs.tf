@@ -14,8 +14,8 @@ output "application_target_group_arn" {
 }
 
 output "application_url" {
-  description = "Public HTTPS endpoint."
-  value       = format("https://%s", var.application_domain)
+  description = "Public application endpoint."
+  value       = var.enable_public_edge ? format("https://%s", var.application_domain) : format("http://%s", aws_lb.application.dns_name)
 }
 
 output "sqlserver_endpoint" {
