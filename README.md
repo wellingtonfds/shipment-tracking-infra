@@ -30,6 +30,9 @@ Para executar o plano de `hml` por GitHub Actions, configure a variável de repo
 
 Comente exatamente `terraform-plan-hml` em um PR interno como `OWNER`, `MEMBER` ou `COLLABORATOR`. O workflow adiciona 👀 ao aceitar o comando, 👍 após concluir e 😕 se falhar. Ele busca o head do PR, inicializa uma cópia temporária sem backend S3, valida e gera apenas o `terraform plan` de `hml`. O artifact do plano permanece disponível por sete dias; o workflow nunca executa `apply`.
 
+Todo PR contra `master` executa `Terraform validate`, sem credenciais AWS ou
+backend remoto. Esse check é obrigatório para mesclar alterações em `master`.
+
 ## Uso local
 
 Defina as variáveis comuns:

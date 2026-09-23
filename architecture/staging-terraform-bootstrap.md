@@ -62,3 +62,10 @@ terraform -chdir=deployment plan -refresh=false -no-color \
 O texto renderizado do plano é publicado como artifact por sete dias. O arquivo
 binário do plano não é publicado nem versionado, pois pode conter valores
 sensíveis.
+
+## Validação obrigatória de pull request
+
+Todo PR contra `master` executa o job `Terraform validate`, que roda
+`terraform fmt -check -recursive`, `terraform init -backend=false -input=false`
+e `terraform validate`, sem credenciais AWS. A ruleset de `master` exige esse
+check antes do merge e bloqueia pushes diretos.
