@@ -26,11 +26,18 @@ variable "single_nat_gateway" {
 variable "hosted_zone_name" {
   description = "Existing public Route 53 zone, without trailing dot."
   type        = string
+  default     = null
 }
 
 variable "application_domain" {
   description = "Public fully qualified API hostname."
   type        = string
+  default     = null
+}
+
+variable "enable_public_edge" {
+  description = "Whether to create the public HTTPS edge with ACM, Route 53 and WAF."
+  type        = bool
 }
 
 variable "allowed_api_cidrs" {

@@ -22,6 +22,18 @@ variable "environment" {
 variable "hosted_zone_name" {
   description = "Existing public Route 53 zone, without trailing dot."
   type        = string
+  default     = null
+}
+
+variable "enable_public_edge" {
+  description = "Whether to create the public HTTPS edge with ACM, Route 53 and WAF."
+  type        = bool
+  default     = true
+
+  validation {
+    condition     = !var.enable_public_edge || var.hosted_zone_name != null
+    error_message = "hosted_zone_name is required when enable_public_edge is true."
+  }
 }
 
 variable "allowed_api_cidrs" {

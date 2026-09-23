@@ -14,8 +14,8 @@ resource "aws_security_group" "alb" {
   vpc_id = module.vpc.vpc_id
 
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = var.enable_public_edge ? 443 : 80
+    to_port     = var.enable_public_edge ? 443 : 80
     protocol    = "tcp"
     cidr_blocks = var.allowed_api_cidrs
   }

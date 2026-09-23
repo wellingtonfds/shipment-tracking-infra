@@ -1,18 +1,20 @@
 resource "aws_acm_certificate" "api" {
+  count = var.enable_public_edge ? 1 : 0
+
   domain_name       = var.application_domain
   validation_method = "DNS"
 }
 
 resource "aws_route53_record" "certificate" {
-  for_each = {
-    for option in aws_acm_certificate.api.domain_validation_options : option.domain_name => {
+  for_each = var.enable_public_edge ? {
+    for option in aws_acm_certificate.api[0].domain_validation_options : option.domain_name => {
       name  = option.resource_record_name
       type  = option.resource_record_type
       value = option.resource_record_value
     }
-  }
+  } : {}
 
-  zone_id = data.aws_route53_zone.public.zone_id
+  zone_id = data.aws_route53_zone.public[0].zone_id
   name    = each.value.name
   type    = each.value.type
   records = [each.value.value]
@@ -20,7 +22,9 @@ resource "aws_route53_record" "certificate" {
 }
 
 resource "aws_acm_certificate_validation" "api" {
-  certificate_arn         = aws_acm_certificate.api.arn
+  count = var.enable_public_edge ? 1 : 0
+
+  certificate_arn         = aws_acm_certificate.api[0].arn
   validation_record_fqdns = [for record in aws_route53_record.certificate : record.fqdn]
 }
 
@@ -48,10 +52,25 @@ resource "aws_lb_target_group" "application" {
 }
 
 resource "aws_lb_listener" "https" {
+  count = var.enable_public_edge ? 1 : 0
+
   load_balancer_arn = aws_lb.application.arn
   port              = 443
   protocol          = "HTTPS"
-  certificate_arn   = aws_acm_certificate_validation.api.certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.api[0].certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.application.arn
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  count = var.enable_public_edge ? 0 : 1
+
+  load_balancer_arn = aws_lb.application.arn
+  port              = 80
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"
@@ -60,6 +79,8 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_wafv2_web_acl" "api" {
+  count = var.enable_public_edge ? 1 : 0
+
   name  = format("%s-api", local.name)
   scope = "REGIONAL"
 
@@ -119,12 +140,16 @@ resource "aws_wafv2_web_acl" "api" {
 }
 
 resource "aws_wafv2_web_acl_association" "api" {
+  count = var.enable_public_edge ? 1 : 0
+
   resource_arn = aws_lb.application.arn
-  web_acl_arn  = aws_wafv2_web_acl.api.arn
+  web_acl_arn  = aws_wafv2_web_acl.api[0].arn
 }
 
 resource "aws_route53_record" "api" {
-  zone_id = data.aws_route53_zone.public.zone_id
+  count = var.enable_public_edge ? 1 : 0
+
+  zone_id = data.aws_route53_zone.public[0].zone_id
   name    = var.application_domain
   type    = "A"
 
