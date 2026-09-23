@@ -28,7 +28,7 @@ Para executar o plano de `hml` por GitHub Actions, configure a variável de repo
 
 - `AWS_PLAN_ROLE_ARN`
 
-Comente exatamente `terraform-plan-hml` em um PR interno como `OWNER`, `MEMBER` ou `COLLABORATOR`. O workflow busca o head do PR, inicializa uma cópia temporária sem backend S3, valida e gera apenas o `terraform plan` de `hml`. O artifact do plano permanece disponível por sete dias; o workflow nunca executa `apply`.
+Comente exatamente `terraform-plan-hml` em um PR interno como `OWNER`, `MEMBER` ou `COLLABORATOR`. O workflow adiciona 👀 ao aceitar o comando, 👍 após concluir e 😕 se falhar. Ele busca o head do PR, inicializa uma cópia temporária sem backend S3, valida e gera apenas o `terraform plan` de `hml`. O artifact do plano permanece disponível por sete dias; o workflow nunca executa `apply`.
 
 ## Uso local
 

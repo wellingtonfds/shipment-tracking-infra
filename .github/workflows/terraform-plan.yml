@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write
   pull-requests: read
 
 env:
@@ -24,6 +25,21 @@ jobs:
        github.event.comment.author_association == 'COLLABORATOR')
     runs-on: ubuntu-latest
     steps:
+      - name: React to accepted command
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: 'eyes',
+              });
+            } catch (error) {
+              core.warning(`Could not add the accepted-command reaction: ${error.message}`);
+            }
+
       - name: Resolve the pull request head
         id: pull_request
         uses: actions/github-script@v7
@@ -98,3 +114,35 @@ jobs:
           name: terraform-plan-hml-${{ github.event.issue.number }}-${{ github.run_id }}
           path: ${{ runner.temp }}/hml-plan.txt
           retention-days: 7
+
+      - name: React to successful plan
+        if: success() && steps.pull_request.outputs.is_internal == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: '+1',
+              });
+            } catch (error) {
+              core.warning(`Could not add the successful-plan reaction: ${error.message}`);
+            }
+
+      - name: React to failed plan
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: 'confused',
+              });
+            } catch (error) {
+              core.warning(`Could not add the failed-plan reaction: ${error.message}`);
+            }

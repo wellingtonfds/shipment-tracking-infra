@@ -22,6 +22,9 @@ O GitHub Actions assume uma role OIDC sem chaves estáticas:
 O ARN da role fica na variável de Actions `AWS_PLAN_ROLE_ARN`; não deve ser
 versionado como segredo nem escrito em código Terraform.
 
+O `GITHUB_TOKEN` recebe também `issues: write`, exclusivamente para reagir ao
+comentário acionador; isso não amplia o acesso da role AWS.
+
 ## Gatilho e proteções
 
 - Evento: comentário criado em issue ou PR.
@@ -32,6 +35,9 @@ versionado como segredo nem escrito em código Terraform.
   mesmo repositório; forks não recebem credenciais AWS.
 - Como `issue_comment` parte do commit de `master`, o workflow consulta e faz
   checkout explícito do SHA do head do PR antes de executar Terraform.
+- Ao aceitar o comando, o workflow adiciona 👀 ao comentário. Após publicar o
+  artifact, adiciona 👍; se qualquer etapa falhar, adiciona 😕. As reações não
+  criam comentários adicionais.
 
 ## Escopo do plano
 
