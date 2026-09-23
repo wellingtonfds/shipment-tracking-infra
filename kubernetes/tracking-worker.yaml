@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracking-worker
+  namespace: tracking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tracking-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tracking-worker
+    spec:
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tracking-worker
+          image: tracking-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "dist/worker.js"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: tracking-runtime-config
+            - secretRef:
+                name: tracking-backend-secrets
+          env:
+            - name: TRACKING_QUEUE_ENABLED
+              value: "true"
+            - name: TRACKING_DISPATCHER_ROLE
+              value: "false"
+            - name: TRACKING_WORKER_ROLE
+              value: "true"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_TLS
+              value: "true"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tracking-worker
+  namespace: tracking
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tracking-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60

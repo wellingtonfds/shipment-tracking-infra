@@ -1,5 +1,4 @@
-# This Deployment document is a strategic-merge patch. Apply it through the
-# backend's Kustomize/Helm deployment; it supplements the existing container spec.
+# Este manifesto complementa o Deployment da API aplicado pelo pipeline de deploy.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,6 +11,12 @@ spec:
       labels:
         app.kubernetes.io/name: tracking-api
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
@@ -19,6 +24,45 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: tracking-api
+      containers:
+        - name: tracking-api
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: tracking-runtime-config
+            - secretRef:
+                name: tracking-backend-secrets
+          env:
+            - name: TRACKING_QUEUE_ENABLED
+              value: "true"
+            - name: TRACKING_DISPATCHER_ROLE
+              value: "true"
+            - name: TRACKING_WORKER_ROLE
+              value: "false"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_TLS
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -54,4 +98,3 @@ spec:
         - type: Percent
           value: 25
           periodSeconds: 60
-

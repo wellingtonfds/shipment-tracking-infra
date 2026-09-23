@@ -32,3 +32,8 @@ output "redis_primary_endpoint" {
   description = "Private primary Redis endpoint."
   value       = module.platform.redis_primary_endpoint
 }
+
+output "redis_auth_secret_arn" {
+  description = "ARN do Secrets Manager com o token Redis; sincronize-o no namespace Kubernetes de tracking."
+  value       = module.platform.redis_auth_secret_arn
+}

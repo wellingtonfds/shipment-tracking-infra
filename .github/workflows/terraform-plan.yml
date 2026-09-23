@@ -2,9 +2,9 @@ name: Terraform plan
 
 on:
   pull_request:
-    branches: [main]
+    branches: [master]
   push:
-    branches: [main]
+    branches: [master]
 
 permissions:
   contents: read
@@ -36,7 +36,7 @@ jobs:
       - name: Run TFLint
         run: tflint --init && tflint --recursive
         working-directory: .
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -45,6 +45,13 @@ jobs:
 
   plan:
     needs: validate
+    if: >-
+      vars.AWS_PLAN_ROLE_ARN != '' &&
+      vars.AWS_REGION != '' &&
+      vars.TF_STATE_BUCKET != '' &&
+      vars.TF_STATE_LOCK_TABLE != '' &&
+      vars.HOSTED_ZONE_NAME != '' &&
+      vars.ALLOWED_API_CIDRS != ''
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

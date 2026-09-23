@@ -32,3 +32,8 @@ output "redis_primary_endpoint" {
   description = "Private primary Redis endpoint."
   value       = aws_elasticache_replication_group.redis.primary_endpoint_address
 }
+
+output "redis_auth_secret_arn" {
+  description = "ARN do Secrets Manager com o token TLS do Redis para sincronização do segredo Kubernetes."
+  value       = aws_secretsmanager_secret.redis_auth.arn
+}

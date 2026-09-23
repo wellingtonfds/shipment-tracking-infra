@@ -14,11 +14,11 @@ architecture/     diagrama e decisões de arquitetura
 
 Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram capacidade, disponibilidade, retenção e proteções sem copiar blocos de recursos.
 
-| Ambiente | DNS | Perfil |
-| --- | --- | --- |
-| `dev` | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ |
-| `hml` | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
-| `prod` | `api.<zona>` | Dois nós, NAT por AZ, RDS e Redis Multi-AZ |
+| Ambiente | DNS              | Perfil                                            |
+| -------- | ---------------- | ------------------------------------------------- |
+| `dev`    | `api-dev.<zona>` | Spot, um nó inicial, um NAT, dados Single-AZ      |
+| `hml`    | `api-hml.<zona>` | On-Demand, um nó inicial, um NAT, dados Single-AZ |
+| `prod`   | `api.<zona>`     | Dois nós, NAT por AZ, RDS e Redis Multi-AZ        |
 
 ## Pré-requisitos
 
@@ -31,9 +31,9 @@ Crie GitHub Environments chamados `dev`, `hml` e `prod` e configure nestes ambie
 - `TF_STATE_BUCKET`
 - `TF_STATE_LOCK_TABLE`
 - `HOSTED_ZONE_NAME`
-- `ALLOWED_API_CIDRS`, como lista JSON: `["0.0.0.0/0"]`
+- `ALLOWED_API_CIDRS`, como lista JSON dos CIDRs autorizados no listener publico da API e no endpoint publico do EKS, por exemplo `["198.51.100.0/24"]`.
 
-O workflow valida o código uma vez e executa `terraform plan` para os três ambientes. Ele não executa `apply`.
+O workflow valida o código uma vez e executa `terraform plan` para os três ambientes quando todas as variáveis estiverem configuradas. Sem as variáveis do papel OIDC ou do estado remoto, os planos são ignorados. O workflow nunca executa `apply`.
 
 ## Uso local
 
@@ -42,7 +42,7 @@ Defina as variáveis comuns:
 ```bash
 export TF_VAR_aws_region="us-east-1"
 export TF_VAR_hosted_zone_name="example.com"
-export TF_VAR_allowed_api_cidrs='["0.0.0.0/0"]'
+export TF_VAR_allowed_api_cidrs='["198.51.100.0/24"]'
 ```
 
 Valide sem acessar o estado remoto:
@@ -78,8 +78,20 @@ Homologação usa nós On-Demand, mas permanece Single-AZ e com somente um NAT. 
 
 Cada ambiente publica imagens no seu próprio ECR e implanta no EKS correspondente. O Deployment deve definir requests e limits de CPU, usar o endpoint `/health` e consumir o target group exportado pelo Terraform por meio de um `TargetGroupBinding`.
 
-O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) mantém de duas a seis réplicas e tenta distribuí-las entre zonas. Em dev e hml, o único nó inicial pode concentrar as réplicas até que o node group aumente.
+O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) mantém de duas a seis réplicas, configura o dispatcher do outbox e usa `/api/v1/health` nas sondas. O manifesto [kubernetes/tracking-worker.yaml](kubernetes/tracking-worker.yaml) executa `node dist/worker.js`, mantém de duas a oito réplicas e define probes e recursos. Em dev e hml, o único nó inicial pode concentrar as réplicas até que o node group aumente.
 
-RDS e Redis não têm endereço público. Somente a identidade IAM do workload deve receber acesso ao segredo mestre gerenciado pelo RDS.
+RDS e Redis não têm endereço público. Redis usa TLS e token de autenticação aleatório, gerenciado em Secrets Manager; o Terraform expõe somente o ARN do segredo. Sincronize o token para `REDIS_PASSWORD` no segredo Kubernetes `tracking-backend-secrets`. Esse segredo também fornece `DATABASE_URL`, `JWT_SECRET` e, quando configurado, `GEOCODER_API_KEY`. Não grave valores secretos em manifests.
+
+O token Redis também fica no estado Terraform. Mantenha o backend S3 com criptografia habilitada e acesso restrito, além do versionamento recomendado acima.
+
+Crie `tracking-runtime-config` no namespace `tracking` com pelo menos `REDIS_HOST` (valor de `terraform output -raw redis_primary_endpoint`). Também pode configurar `GEOCODER_URL`, `GEOCODER_USER_AGENT`, `GEOCODE_RATE_LIMIT`, `GEOCODER_CACHE_TTL_SECONDS`, `TRACKING_WORKER_CONCURRENCY` e `DLQ_REPLAY_INTERVAL_MS`. O dispatcher fica nas réplicas da API; só o deployment worker consome a fila. O outbox SQL permite recuperar itens pendentes depois de uma interrupção do Redis.
+
+Os autoscalers usam CPU. A validação deste repositório não aplica recursos:
+
+```bash
+terraform -chdir=deployment init -backend=false
+terraform fmt -check -recursive
+terraform -chdir=deployment validate
+```
 
 Veja a arquitetura em [architecture/architecture.md](architecture/architecture.md).
