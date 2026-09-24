@@ -10,7 +10,7 @@ environments/     perfis de capacidade e chaves de estado por ambiente
 modules/platform/ implementação reutilizável da plataforma
 kubernetes/       chart Helm com a baseline completa dos workloads
 architecture/     diagrama e decisões de arquitetura
-docs/             documentação operacional de deployment
+docs/             ADRs e documentação operacional de deployment
 ```
 
 Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram capacidade, disponibilidade, retenção e proteções sem copiar blocos de recursos.
@@ -81,4 +81,6 @@ O backend controla somente o ConfigMap não secreto, a imagem imutável, a ativa
 
 RDS e Redis não têm endereço público. O Pod Identity Agent e o ASCP integram o Secrets Manager aos pods sem credenciais estáticas, e o Metrics Server fornece as métricas usadas pelos HPAs. Valores secretos não são gravados no chart nem expostos em outputs.
 
-Veja também a [arquitetura multiambiente](architecture/architecture.md) e o [ADR de Kubernetes](docs/ADR-0001.md).
+Veja também a [arquitetura multiambiente](architecture/architecture.md), o
+[ADR de Kubernetes](docs/adr/0001.md) e o
+[ADR de modelo de compute](docs/adr/0002.md).
