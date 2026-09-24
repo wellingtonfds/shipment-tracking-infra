@@ -133,3 +133,14 @@ Depois de revisão, aprovação e configuração do backend remoto do ambiente, 
 7. invocar a action do backend para criar o ConfigMap, atualizar imagem, aplicar HPA e verificar rollout.
 
 O chart Helm é aplicado pelo mesmo Terraform após o cluster e os add-ons. A remoção ou alteração da baseline também deve passar pelo plano da infraestrutura; a action do backend não corrige drift de probes, recursos, segurança, volumes, Service ou `TargetGroupBinding`.
+# Rollout de observabilidade
+
+Faça merge e aplique esta infraestrutura antes de publicar o backend com OTel. O
+primeiro apply pode exigir importar o add-on ou log group já existente para o state;
+esta PR não executa `terraform apply`. Após aplicar, publique o backend com o Helm
+value `environment` correspondente (`dev`, `hml` ou `prod`).
+
+Como validação pós-deploy, aguarde alguns minutos, confirme API e worker no CloudWatch
+Application Signals, consulte `bullmq.backlog` no Logs Insights e confira os três
+alarmes em CloudWatch. Alarmes sem eventos devem permanecer `OK`, pois ausência é
+tratada como `notBreaching`.

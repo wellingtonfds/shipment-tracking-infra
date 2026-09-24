@@ -36,4 +36,5 @@ module "platform" {
   redis_snapshot_retention_limit = var.environment_config.redis.snapshot_retention_limit
   alb_deletion_protection        = var.environment_config.alb_deletion_protection
   ecr_image_retention_count      = var.environment_config.ecr_image_retention_count
+  application_log_retention_days = var.environment_config.application_log_retention_days
 }

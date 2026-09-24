@@ -29,6 +29,7 @@ environment_config = {
     snapshot_retention_limit = 7
   }
 
-  alb_deletion_protection   = true
-  ecr_image_retention_count = 30
+  alb_deletion_protection        = true
+  ecr_image_retention_count      = 30
+  application_log_retention_days = 90
 }

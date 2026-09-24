@@ -69,8 +69,9 @@ variable "environment_config" {
       replicas_per_node_group  = number
       snapshot_retention_limit = number
     })
-    alb_deletion_protection   = bool
-    ecr_image_retention_count = number
+    alb_deletion_protection        = bool
+    ecr_image_retention_count      = number
+    application_log_retention_days = number
   })
 
   validation {
