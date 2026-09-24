@@ -124,3 +124,13 @@ variable "alb_deletion_protection" {
 variable "ecr_image_retention_count" {
   type = number
 }
+
+variable "application_log_retention_days" {
+  description = "Retention for application logs collected by Container Insights."
+  type        = number
+
+  validation {
+    condition     = contains([7, 30, 90], var.application_log_retention_days)
+    error_message = "Application log retention must be 7, 30 or 90 days."
+  }
+}

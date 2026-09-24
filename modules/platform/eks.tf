@@ -44,6 +44,16 @@ resource "aws_iam_role_policy_attachment" "eks_ecr_read" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
+resource "aws_iam_role_policy_attachment" "eks_cloudwatch_agent" {
+  role       = aws_iam_role.eks_nodes.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_xray_daemon" {
+  role       = aws_iam_role.eks_nodes.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 resource "aws_eks_cluster" "this" {
   name     = local.name
   role_arn = aws_iam_role.eks_cluster.arn
@@ -98,7 +108,9 @@ resource "aws_eks_node_group" "application" {
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker,
     aws_iam_role_policy_attachment.eks_cni,
-    aws_iam_role_policy_attachment.eks_ecr_read
+    aws_iam_role_policy_attachment.eks_ecr_read,
+    aws_iam_role_policy_attachment.eks_cloudwatch_agent,
+    aws_iam_role_policy_attachment.eks_xray_daemon
   ]
 }
 
@@ -124,6 +136,14 @@ resource "aws_eks_addon" "secrets_store_csi_provider" {
 resource "aws_eks_addon" "metrics_server" {
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = "metrics-server"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [aws_eks_node_group.application]
+}
+
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "amazon-cloudwatch-observability"
   resolve_conflicts_on_update = "PRESERVE"
 
   depends_on = [aws_eks_node_group.application]

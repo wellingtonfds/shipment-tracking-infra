@@ -19,6 +19,8 @@ spec:
       maxSurge: 1
   template:
     metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: "true"
       labels:
         app.kubernetes.io/name: tracking-api
         app.kubernetes.io/part-of: shipment-tracking
@@ -60,6 +62,12 @@ spec:
             - secretRef:
                 name: tracking-backend-secrets
           env:
+            - name: NODE_ENV
+              value: {{ .Values.environment | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: shipment-tracking-service
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment.name={{ .Values.environment }}
             - name: PORT
               value: "3000"
             - name: API_PREFIX
