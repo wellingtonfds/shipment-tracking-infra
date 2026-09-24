@@ -2,34 +2,54 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tracking-worker
-  namespace: tracking
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: tracking-worker
+    app.kubernetes.io/part-of: shipment-tracking
+    app.kubernetes.io/component: worker
 spec:
-  replicas: 2
+  replicas: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: tracking-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   template:
     metadata:
       labels:
         app.kubernetes.io/name: tracking-worker
+        app.kubernetes.io/part-of: shipment-tracking
+        app.kubernetes.io/component: worker
     spec:
+      serviceAccountName: tracking-backend
       terminationGracePeriodSeconds: 60
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: tracking-worker
       containers:
         - name: tracking-worker
-          image: tracking-api:latest
+          image: {{ .Values.worker.image }}
           imagePullPolicy: IfNotPresent
           command: ["node", "dist/worker.js"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
-              drop: [ALL]
+              drop: ["ALL"]
           envFrom:
             - configMapRef:
                 name: tracking-runtime-config
@@ -54,6 +74,9 @@ spec:
               cpu: "1"
               memory: 1Gi
           volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
             - name: tmp
               mountPath: /tmp
           startupProbe:
@@ -63,16 +86,8 @@ spec:
                 - -e
                 - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
             periodSeconds: 5
-            failureThreshold: 36
-          livenessProbe:
-            exec:
-              command:
-                - node
-                - -e
-                - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
-            periodSeconds: 20
             timeoutSeconds: 3
-            failureThreshold: 3
+            failureThreshold: 36
           readinessProbe:
             exec:
               command:
@@ -82,33 +97,21 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "const {statSync}=require('node:fs');if(Date.now()-statSync('/tmp/tracking-worker-health').mtimeMs>30000)process.exit(1)"
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: tracking-backend-secrets
         - name: tmp
           emptyDir: {}
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: tracking-worker
-  namespace: tracking
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: tracking-worker
-  minReplicas: 2
-  maxReplicas: 8
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 65
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 25
-          periodSeconds: 60

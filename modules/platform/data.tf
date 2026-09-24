@@ -68,3 +68,10 @@ resource "aws_secretsmanager_secret_version" "redis_auth" {
   secret_id     = aws_secretsmanager_secret.redis_auth.id
   secret_string = random_password.redis_auth.result
 }
+
+resource "aws_secretsmanager_secret" "backend_runtime" {
+  name                    = format("%s/backend/runtime", local.name)
+  description             = format("Segredos de runtime da API e do worker de %s", local.name)
+  kms_key_id              = aws_kms_key.workload.arn
+  recovery_window_in_days = 7
+}

@@ -8,6 +8,22 @@ output "eks_cluster_name" {
   value       = aws_eks_cluster.this.name
 }
 
+output "eks_cluster_endpoint" {
+  description = "Endpoint used by the Helm provider after the cluster exists."
+  value       = aws_eks_cluster.this.endpoint
+}
+
+output "eks_cluster_certificate_authority_data" {
+  description = "Base64-encoded cluster CA used by the Helm provider."
+  value       = aws_eks_cluster.this.certificate_authority[0].data
+  sensitive   = true
+}
+
+output "vpc_id" {
+  description = "VPC used by the AWS Load Balancer Controller."
+  value       = module.vpc.vpc_id
+}
+
 output "application_target_group_arn" {
   description = "Target group consumed by the TargetGroupBinding."
   value       = aws_lb_target_group.application.arn
@@ -36,4 +52,19 @@ output "redis_primary_endpoint" {
 output "redis_auth_secret_arn" {
   description = "ARN do Secrets Manager com o token TLS do Redis para sincronização do segredo Kubernetes."
   value       = aws_secretsmanager_secret.redis_auth.arn
+}
+
+output "backend_runtime_secret_arn" {
+  description = "Secrets Manager container populated out of band with backend runtime keys."
+  value       = aws_secretsmanager_secret.backend_runtime.arn
+}
+
+output "load_balancer_controller_role_arn" {
+  description = "Pod Identity role used by the AWS Load Balancer Controller."
+  value       = aws_iam_role.pod_identity_load_balancer_controller.arn
+}
+
+output "backend_pod_identity_role_arn" {
+  description = "Pod Identity role used by the application to read its runtime secret."
+  value       = aws_iam_role.pod_identity_backend.arn
 }

@@ -1,0 +1,10 @@
+namespace: tracking
+awsRegion: us-east-1
+backendSecretArn: ""
+targetGroupArn: ""
+
+api:
+  image: public.ecr.aws/docker/library/node:24.21.0-bookworm-slim
+
+worker:
+  image: public.ecr.aws/docker/library/node:24.21.0-bookworm-slim

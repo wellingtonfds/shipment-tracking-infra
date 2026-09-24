@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tracking-baseline
+description: Baseline operacional dos workloads de shipment tracking
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

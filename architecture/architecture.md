@@ -10,6 +10,9 @@ flowchart TB
   Module --> EKS
   Module --> Data[RDS SQL Server e Redis]
   Module --> ECR
+  Module --> Addons[Pod Identity, ASCP, Metrics Server e Load Balancer Controller]
+  Addons --> Baseline[Chart Helm: workloads com zero réplicas]
+  Secrets[Secrets Manager] --> Addons
 
   subgraph VPC[VPC exclusiva em duas zonas]
     EKS --> Data
@@ -17,17 +20,18 @@ flowchart TB
 
   Edge --> EKS
   ECR --> EKS
+  Baseline --> EKS
 ```
 
 ## Isolamento
 
 Cada ambiente possui recursos, nomes, DNS, CIDR e estado próprios. A separação de estado impede que um plano de dev altere recursos de hml ou prod. Os três ambientes ficam na mesma conta e região AWS, mas não compartilham VPC, banco, cache, cluster ou registry.
 
-| Ambiente | CIDR | Estado | Endpoint |
-| --- | --- | --- | --- |
-| dev | `10.40.0.0/16` | `tracking/dev/terraform.tfstate` | `api-dev.<zona>` |
-| hml | `10.50.0.0/16` | `tracking/hml/terraform.tfstate` | `api-hml.<zona>` |
-| prod | `10.60.0.0/16` | `tracking/prod/terraform.tfstate` | `api.<zona>` |
+| Ambiente | CIDR           | Estado                            | Endpoint         |
+| -------- | -------------- | --------------------------------- | ---------------- |
+| dev      | `10.40.0.0/16` | `tracking/dev/terraform.tfstate`  | `api-dev.<zona>` |
+| hml      | `10.50.0.0/16` | `tracking/hml/terraform.tfstate`  | `api-hml.<zona>` |
+| prod     | `10.60.0.0/16` | `tracking/prod/terraform.tfstate` | `api.<zona>`     |
 
 ## Disponibilidade e custo
 
@@ -37,4 +41,6 @@ Dev usa um node group Spot diversificado. Homologação e produção usam On-Dem
 
 ## Fluxo de entrega
 
-O pipeline de infraestrutura gera planos independentes para dev, hml e prod. O pipeline da aplicação deve publicar no ECR e implantar no EKS do mesmo ambiente, usando os outputs daquele estado. A promoção esperada é dev → hml → prod.
+O pipeline de infraestrutura gera planos independentes para dev, hml e prod e mantém a baseline completa com zero réplicas. Uma automação futura da aplicação publicará no ECR e, separadamente, invocará a action do backend para configurar runtime, imagem e escala no EKS do mesmo ambiente. A promoção esperada é dev → hml → prod.
+
+A divisão detalhada de responsabilidades, o contrato de nomes e o fluxo Secrets Manager → Pod Identity → ASCP → pod estão em [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md).
