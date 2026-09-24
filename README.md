@@ -8,8 +8,9 @@ Infraestrutura AWS do backend de rastreamento, gerenciada pelo mesmo código Ter
 deployment/       root module executado pelo Terraform
 environments/     perfis de capacidade e chaves de estado por ambiente
 modules/platform/ implementação reutilizável da plataforma
-kubernetes/       manifesto complementar da aplicação
+kubernetes/       chart Helm com a baseline completa dos workloads
 architecture/     diagrama e decisões de arquitetura
+docs/             documentação operacional de deployment
 ```
 
 Os recursos existem somente em `modules/platform`. Os arquivos `.tfvars` alteram capacidade, disponibilidade, retenção e proteções sem copiar blocos de recursos.
@@ -74,22 +75,10 @@ Homologação usa nós On-Demand, mas permanece Single-AZ e com somente um NAT. 
 
 ## Contrato com o backend
 
-Cada ambiente publica imagens no seu próprio ECR e implanta no EKS correspondente. O Deployment deve definir requests e limits de CPU, usar o endpoint `/health` e consumir o target group exportado pelo Terraform por meio de um `TargetGroupBinding`.
+Cada ambiente publica imagens no seu próprio ECR e recebe a aplicação no EKS correspondente. Este repositório controla o chart Helm completo da baseline: namespace, identidade, segredos, Deployments, probes, recursos, segurança, Service e `TargetGroupBinding`. Os Deployments nascem com zero réplicas e imagem placeholder; não há HPA neste repositório.
 
-O manifesto [kubernetes/tracking-api-autoscaling.yaml](kubernetes/tracking-api-autoscaling.yaml) mantém de duas a seis réplicas, configura o dispatcher do outbox e usa `/api/v1/health` nas sondas. O manifesto [kubernetes/tracking-worker.yaml](kubernetes/tracking-worker.yaml) executa `node dist/worker.js`, mantém de duas a oito réplicas e define probes e recursos. Em dev e hml, o único nó inicial pode concentrar as réplicas até que o node group aumente.
+O backend controla somente o ConfigMap não secreto, a imagem imutável, a ativação das réplicas e os HPAs. Os nomes estáveis e o fluxo operacional completo estão em [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-RDS e Redis não têm endereço público. Redis usa TLS e token de autenticação aleatório, gerenciado em Secrets Manager; o Terraform expõe somente o ARN do segredo. Sincronize o token para `REDIS_PASSWORD` no segredo Kubernetes `tracking-backend-secrets`. Esse segredo também fornece `DATABASE_URL`, `JWT_SECRET` e, quando configurado, `GEOCODER_API_KEY`. Não grave valores secretos em manifests.
+RDS e Redis não têm endereço público. O Pod Identity Agent e o ASCP integram o Secrets Manager aos pods sem credenciais estáticas, e o Metrics Server fornece as métricas usadas pelos HPAs. Valores secretos não são gravados no chart nem expostos em outputs.
 
-O token Redis também fica no estado Terraform. Mantenha o backend S3 com criptografia habilitada e acesso restrito, além do versionamento recomendado acima.
-
-Crie `tracking-runtime-config` no namespace `tracking` com pelo menos `REDIS_HOST` (valor de `terraform output -raw redis_primary_endpoint`). Também pode configurar `GEOCODER_URL`, `GEOCODER_USER_AGENT`, `GEOCODE_RATE_LIMIT`, `GEOCODER_CACHE_TTL_SECONDS`, `TRACKING_WORKER_CONCURRENCY` e `DLQ_REPLAY_INTERVAL_MS`. O dispatcher fica nas réplicas da API; só o deployment worker consome a fila. O outbox SQL permite recuperar itens pendentes depois de uma interrupção do Redis.
-
-Os autoscalers usam CPU. A validação deste repositório não aplica recursos:
-
-```bash
-terraform -chdir=deployment init -backend=false
-terraform fmt -check -recursive
-terraform -chdir=deployment validate
-```
-
-Veja a arquitetura em [architecture/architecture.md](architecture/architecture.md).
+Veja também a [arquitetura multiambiente](architecture/architecture.md) e o [ADR de Kubernetes](docs/ADR-0001.md).

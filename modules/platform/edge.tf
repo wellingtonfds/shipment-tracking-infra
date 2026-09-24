@@ -40,13 +40,13 @@ resource "aws_lb" "application" {
 
 resource "aws_lb_target_group" "application" {
   name        = format("%s-api", local.name)
-  port        = 8080
+  port        = 3000
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = module.vpc.vpc_id
 
   health_check {
-    path    = "/health"
+    path    = "/api/v1/health"
     matcher = "200-399"
   }
 }

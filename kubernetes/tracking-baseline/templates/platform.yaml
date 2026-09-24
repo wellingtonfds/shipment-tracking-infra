@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: shipment-tracking
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tracking-backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: shipment-tracking
+automountServiceAccountToken: false
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: tracking-backend-secrets
+  namespace: {{ .Values.namespace }}
+spec:
+  provider: aws
+  parameters:
+    region: {{ .Values.awsRegion | quote }}
+    usePodIdentity: "true"
+    objects: |
+      - objectName: {{ required "backendSecretArn is required" .Values.backendSecretArn | quote }}
+        objectType: "secretsmanager"
+        jmesPath:
+          - path: "DATABASE_URL"
+            objectAlias: "DATABASE_URL"
+          - path: "JWT_SECRET"
+            objectAlias: "JWT_SECRET"
+          - path: "REDIS_PASSWORD"
+            objectAlias: "REDIS_PASSWORD"
+          - path: "GEOCODER_API_KEY"
+            objectAlias: "GEOCODER_API_KEY"
+  secretObjects:
+    - secretName: tracking-backend-secrets
+      type: Opaque
+      data:
+        - objectName: DATABASE_URL
+          key: DATABASE_URL
+        - objectName: JWT_SECRET
+          key: JWT_SECRET
+        - objectName: REDIS_PASSWORD
+          key: REDIS_PASSWORD
+        - objectName: GEOCODER_API_KEY
+          key: GEOCODER_API_KEY

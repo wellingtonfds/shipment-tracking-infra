@@ -7,6 +7,9 @@ flowchart TB
   Module --> EKS
   Module --> Data[RDS SQL Server e Redis]
   Module --> ECR
+  Module --> Addons[Pod Identity, ASCP, Metrics Server e Load Balancer Controller]
+  Addons --> Baseline[Chart Helm: workloads com zero réplicas]
+  Secrets[Secrets Manager] --> Addons
 
   subgraph VPC[VPC exclusiva em duas zonas]
     EKS --> Data
@@ -14,3 +17,4 @@ flowchart TB
 
   Edge --> EKS
   ECR --> EKS
+  Baseline --> EKS

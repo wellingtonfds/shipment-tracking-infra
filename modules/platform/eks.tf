@@ -101,3 +101,127 @@ resource "aws_eks_node_group" "application" {
     aws_iam_role_policy_attachment.eks_ecr_read
   ]
 }
+
+resource "aws_eks_addon" "pod_identity_agent" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "eks-pod-identity-agent"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [aws_eks_node_group.application]
+}
+
+resource "aws_eks_addon" "secrets_store_csi_provider" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "aws-secrets-store-csi-driver-provider"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    aws_eks_node_group.application
+  ]
+}
+
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "metrics-server"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  depends_on = [aws_eks_node_group.application]
+}
+
+resource "aws_iam_role" "pod_identity_load_balancer_controller" {
+  name = format("%s-load-balancer-controller", local.name)
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "pods.eks.amazonaws.com" }
+      Action = [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_policy" "load_balancer_controller" {
+  name   = format("%s-load-balancer-controller", local.name)
+  policy = file("${path.module}/policies/aws-load-balancer-controller-v3.4.2.json")
+}
+
+resource "aws_iam_role_policy_attachment" "load_balancer_controller" {
+  role       = aws_iam_role.pod_identity_load_balancer_controller.name
+  policy_arn = aws_iam_policy.load_balancer_controller.arn
+}
+
+resource "aws_eks_pod_identity_association" "load_balancer_controller" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "kube-system"
+  service_account = "aws-load-balancer-controller"
+  role_arn        = aws_iam_role.pod_identity_load_balancer_controller.arn
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    aws_iam_role_policy_attachment.load_balancer_controller
+  ]
+}
+
+resource "aws_iam_role" "pod_identity_backend" {
+  name = format("%s-backend", local.name)
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "pods.eks.amazonaws.com" }
+      Action = [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "backend_secrets" {
+  name = "read-runtime-secret"
+  role = aws_iam_role.pod_identity_backend.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadRuntimeSecret"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.backend_runtime.arn
+      },
+      {
+        Sid      = "DecryptRuntimeSecret"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = aws_kms_key.workload.arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = format("secretsmanager.%s.amazonaws.com", data.aws_region.current.name)
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_eks_pod_identity_association" "backend" {
+  cluster_name    = aws_eks_cluster.this.name
+  namespace       = "tracking"
+  service_account = "tracking-backend"
+  role_arn        = aws_iam_role.pod_identity_backend.arn
+
+  depends_on = [
+    aws_eks_addon.pod_identity_agent,
+    aws_iam_role_policy.backend_secrets
+  ]
+}
